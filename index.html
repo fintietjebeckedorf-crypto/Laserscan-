@@ -130,7 +130,6 @@
         color: var(--primary);
       }
     </style>
-    <script src="https://unpkg.com/html5-qrcode" defer></script>
   </head>
   <body>
     <main class="container">
@@ -146,15 +145,16 @@
         </div>
 
         <div class="buttons">
-          <button class="btn btn-lasern action-btn" data-taetigkeit="Lasern" disabled>Lasern</button>
-          <button class="btn btn-hacken action-btn" data-taetigkeit="Hacken" disabled>Hacken</button>
-          <button class="btn btn-spritzen action-btn" data-taetigkeit="Spritzen" disabled>Spritzen</button>
+          <button class="btn btn-lasern action-btn" data-taetigkeit="Lasern">Lasern</button>
+          <button class="btn btn-hacken action-btn" data-taetigkeit="Hacken">Hacken</button>
+          <button class="btn btn-spritzen action-btn" data-taetigkeit="Spritzen">Spritzen</button>
         </div>
 
         <div id="status" class="status"></div>
       </section>
     </main>
 
+    <script src="https://unpkg.com/html5-qrcode"></script>
     <script>
       // Supabase Konfiguration
       const SUPABASE_URL = "HIER_SUPABASE_URL";
@@ -167,8 +167,7 @@
       let scannedCode = "";
       let scannerReady = false;
       let scannerPaused = false;
-
-      const html5QrCode = new Html5Qrcode("reader");
+      let html5QrCode = null;
       const scannerConfig = {
         fps: 10,
         qrbox: { width: 260, height: 260 },
@@ -183,23 +182,33 @@
         statusEl.className = `status ${type}`.trim();
       }
 
-      function toggleButtons(enabled) {
-        actionButtons.forEach((btn) => {
-          btn.disabled = !enabled;
-        });
-      }
-
       function resetScanState() {
         scannedCode = "";
         codeBox.textContent = "Noch kein Code gescannt.";
-        toggleButtons(false);
       }
 
       async function startScanner() {
+        if (!window.Html5Qrcode || !window.Html5QrcodeSupportedFormats) {
+          setStatus("Scanner-Bibliothek wurde nicht geladen.", "error");
+          return;
+        }
+
+        if (!html5QrCode) {
+          html5QrCode = new Html5Qrcode("reader");
+        }
+
         setStatus("Kamera wird gestartet ...", "info");
         try {
+          const cameras = await Html5Qrcode.getCameras();
+          if (!cameras.length) {
+            throw new Error("Keine Kamera gefunden.");
+          }
+
+          const preferredCamera =
+            cameras.find((cam) => /back|rear|environment/i.test(cam.label)) || cameras[0];
+
           await html5QrCode.start(
-            { facingMode: "environment" },
+            preferredCamera.id,
             scannerConfig,
             (decodedText) => {
               if (!decodedText || scannedCode) {
@@ -207,7 +216,6 @@
               }
               scannedCode = decodedText;
               codeBox.textContent = decodedText;
-              toggleButtons(true);
               setStatus("Code erkannt. Bitte Tätigkeit auswählen.", "info");
               html5QrCode.pause(true);
               scannerPaused = true;
