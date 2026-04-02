@@ -6,13 +6,14 @@
     <title>Arbeiten Erfassung</title>
     <style>
       :root {
-        --bg: #f5f6f8;
+        --bg: #eef2ff;
         --card: #ffffff;
         --text: #1f2937;
         --muted: #6b7280;
-        --ok: #15803d;
+        --ok: #166534;
         --error: #b91c1c;
-        --primary: #2563eb;
+        --primary: #1d4ed8;
+        --border: #dbe4ff;
       }
 
       * {
@@ -22,58 +23,76 @@
       body {
         margin: 0;
         font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-        background: var(--bg);
+        background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 100%);
         color: var(--text);
       }
 
       .container {
         max-width: 520px;
+        min-height: 100vh;
         margin: 0 auto;
-        padding: 16px;
+        padding: 18px 14px 28px;
       }
 
       .card {
         background: var(--card);
-        border-radius: 14px;
-        padding: 14px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.07);
+        border-radius: 18px;
+        border: 1px solid var(--border);
+        padding: 16px;
+        box-shadow: 0 14px 36px rgba(29, 78, 216, 0.14);
       }
 
       h1 {
-        margin: 0 0 12px;
-        font-size: 1.4rem;
+        margin: 0;
+        font-size: 1.35rem;
+        letter-spacing: 0.2px;
       }
 
       .hint {
-        margin: 0 0 12px;
+        margin: 8px 0 14px;
         color: var(--muted);
-        font-size: 0.95rem;
+        font-size: 0.96rem;
+      }
+
+      .scan-frame {
+        padding: 10px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: #f8faff;
       }
 
       #reader {
         width: 100%;
-        border-radius: 10px;
+        min-height: 300px;
+        border-radius: 12px;
         overflow: hidden;
         background: #000;
       }
 
-      .row {
-        margin-top: 12px;
+      .hidden {
+        display: none;
+      }
+
+      .action-stage {
+        margin-top: 14px;
       }
 
       .label {
-        font-size: 0.9rem;
+        font-size: 0.86rem;
+        font-weight: 700;
+        letter-spacing: 0.2px;
         color: var(--muted);
+        text-transform: uppercase;
       }
 
       .code-box {
         margin-top: 6px;
         width: 100%;
-        min-height: 44px;
+        min-height: 52px;
         padding: 10px 12px;
-        border: 1px solid #d1d5db;
+        border: 1px solid #c7d2fe;
         border-radius: 10px;
-        background: #f9fafb;
+        background: #f8faff;
         font-weight: 600;
         word-break: break-all;
       }
@@ -86,13 +105,20 @@
 
       .btn {
         width: 100%;
-        min-height: 58px;
+        min-height: 60px;
         border: none;
         border-radius: 12px;
-        font-size: 1.1rem;
+        font-size: 1.05rem;
         font-weight: 700;
         color: #fff;
         cursor: pointer;
+        box-shadow: 0 8px 18px rgba(30, 64, 175, 0.2);
+        transition: transform 0.12s ease, filter 0.12s ease;
+      }
+
+      .btn:active {
+        transform: translateY(1px) scale(0.99);
+        filter: brightness(0.96);
       }
 
       .btn:disabled {
@@ -112,10 +138,15 @@
         background: #059669;
       }
 
+      .btn-secondary {
+        background: #475569;
+      }
+
       .status {
         margin-top: 12px;
-        min-height: 24px;
+        min-height: 22px;
         font-weight: 600;
+        font-size: 0.95rem;
       }
 
       .status.ok {
@@ -135,19 +166,24 @@
     <main class="container">
       <section class="card">
         <h1>Arbeiten erfassen</h1>
-        <p class="hint">Code scannen und danach eine Tätigkeit auswählen.</p>
+        <p class="hint">Bitte zuerst QR- oder DataMatrix-Code scannen.</p>
 
-        <div id="reader"></div>
-
-        <div class="row">
-          <div class="label">Gescanntes Ergebnis</div>
-          <div id="codeBox" class="code-box">Noch kein Code gescannt.</div>
+        <div id="scanStage">
+          <div class="scan-frame">
+            <div id="reader"></div>
+          </div>
         </div>
 
-        <div class="buttons">
-          <button class="btn btn-lasern action-btn" data-taetigkeit="Lasern">Lasern</button>
-          <button class="btn btn-hacken action-btn" data-taetigkeit="Hacken">Hacken</button>
-          <button class="btn btn-spritzen action-btn" data-taetigkeit="Spritzen">Spritzen</button>
+        <div id="actionStage" class="action-stage hidden">
+          <div class="label">Gescanntes Ergebnis</div>
+          <div id="codeBox" class="code-box">Noch kein Code gescannt.</div>
+
+          <div class="buttons">
+            <button class="btn btn-lasern action-btn" data-taetigkeit="Lasern">Lasern</button>
+            <button class="btn btn-hacken action-btn" data-taetigkeit="Hacken">Hacken</button>
+            <button class="btn btn-spritzen action-btn" data-taetigkeit="Spritzen">Spritzen</button>
+            <button id="rescanBtn" class="btn btn-secondary" type="button">Anderen Code scannen</button>
+          </div>
         </div>
 
         <div id="status" class="status"></div>
@@ -160,8 +196,11 @@
       const SUPABASE_URL = "HIER_SUPABASE_URL";
       const SUPABASE_ANON_KEY = "HIER_SUPABASE_ANON_KEY";
 
+      const scanStage = document.getElementById("scanStage");
+      const actionStage = document.getElementById("actionStage");
       const codeBox = document.getElementById("codeBox");
       const statusEl = document.getElementById("status");
+      const rescanBtn = document.getElementById("rescanBtn");
       const actionButtons = Array.from(document.querySelectorAll(".action-btn"));
 
       let scannedCode = "";
@@ -182,9 +221,74 @@
         statusEl.className = `status ${type}`.trim();
       }
 
+      function setActionDisabled(disabled) {
+        actionButtons.forEach((btn) => {
+          btn.disabled = disabled;
+        });
+        rescanBtn.disabled = disabled;
+      }
+
+      function showScanStage() {
+        scanStage.classList.remove("hidden");
+        actionStage.classList.add("hidden");
+      }
+
+      function showActionStage() {
+        scanStage.classList.add("hidden");
+        actionStage.classList.remove("hidden");
+      }
+
       function resetScanState() {
         scannedCode = "";
         codeBox.textContent = "Noch kein Code gescannt.";
+        setActionDisabled(false);
+        showScanStage();
+      }
+
+      async function startScannerWithFallbacks() {
+        const onScanSuccess = (decodedText) => {
+          if (!decodedText || scannedCode) {
+            return;
+          }
+          scannedCode = decodedText;
+          codeBox.textContent = decodedText;
+          showActionStage();
+          setStatus("Code erkannt. Bitte Tätigkeit auswählen.", "info");
+
+          if (scannerReady && !scannerPaused) {
+            html5QrCode.pause(true);
+            scannerPaused = true;
+          }
+        };
+
+        const tryModes = [];
+        tryModes.push({ facingMode: { exact: "environment" } });
+        tryModes.push({ facingMode: "environment" });
+
+        try {
+          const cameras = await Html5Qrcode.getCameras();
+          if (cameras.length > 0) {
+            const backCam =
+              cameras.find((cam) => /back|rear|environment|world|rueck|rück/i.test(cam.label)) ||
+              cameras.find((cam) => !/front|user|face|facetime/i.test(cam.label)) ||
+              cameras[0];
+            tryModes.push(backCam.id);
+          }
+        } catch (cameraError) {
+          console.warn("Kamera-Liste konnte nicht gelesen werden:", cameraError);
+        }
+
+        let lastError = null;
+        for (const mode of tryModes) {
+          try {
+            await html5QrCode.start(mode, scannerConfig, onScanSuccess, () => {});
+            return;
+          } catch (error) {
+            lastError = error;
+          }
+        }
+
+        throw lastError || new Error("Keine Kamera konnte gestartet werden.");
       }
 
       async function startScanner() {
@@ -199,32 +303,10 @@
 
         setStatus("Kamera wird gestartet ...", "info");
         try {
-          const cameras = await Html5Qrcode.getCameras();
-          if (!cameras.length) {
-            throw new Error("Keine Kamera gefunden.");
-          }
-
-          const preferredCamera =
-            cameras.find((cam) => /back|rear|environment/i.test(cam.label)) || cameras[0];
-
-          await html5QrCode.start(
-            preferredCamera.id,
-            scannerConfig,
-            (decodedText) => {
-              if (!decodedText || scannedCode) {
-                return;
-              }
-              scannedCode = decodedText;
-              codeBox.textContent = decodedText;
-              setStatus("Code erkannt. Bitte Tätigkeit auswählen.", "info");
-              html5QrCode.pause(true);
-              scannerPaused = true;
-            },
-            () => {}
-          );
+          await startScannerWithFallbacks();
           scannerReady = true;
           scannerPaused = false;
-          setStatus("Scanner bereit.", "info");
+          setStatus("Scanner bereit. Bitte Code vor die Kamera halten.", "info");
         } catch (error) {
           setStatus("Fehler beim Starten der Kamera. Berechtigung prüfen.", "error");
           console.error(error);
@@ -237,6 +319,7 @@
           return;
         }
 
+        setActionDisabled(true);
         setStatus("Speichere ...", "info");
 
         try {
@@ -270,6 +353,8 @@
         } catch (error) {
           setStatus("Fehler beim Speichern.", "error");
           console.error(error);
+        } finally {
+          setActionDisabled(false);
         }
       }
 
@@ -277,6 +362,17 @@
         button.addEventListener("click", () => {
           saveTaetigkeit(button.dataset.taetigkeit);
         });
+      });
+
+      rescanBtn.addEventListener("click", () => {
+        resetScanState();
+        setStatus("Bereit für neuen Scan.", "info");
+        if (scannerReady && scannerPaused) {
+          html5QrCode.resume();
+          scannerPaused = false;
+        } else if (!scannerReady) {
+          startScanner();
+        }
       });
 
       resetScanState();
