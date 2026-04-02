@@ -54,6 +54,31 @@
         font-size: 0.96rem;
       }
 
+      .config-bar {
+        margin: 0 0 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .config-state {
+        font-size: 0.86rem;
+        font-weight: 700;
+        padding: 6px 10px;
+        border-radius: 999px;
+      }
+
+      .config-state.ok {
+        color: #166534;
+        background: #dcfce7;
+      }
+
+      .config-state.warn {
+        color: #92400e;
+        background: #fef3c7;
+      }
+
       .scan-frame {
         padding: 10px;
         border: 1px solid var(--border);
@@ -71,6 +96,40 @@
 
       .hidden {
         display: none;
+      }
+
+      .config-panel {
+        margin-bottom: 12px;
+        padding: 12px;
+        border: 1px solid #c7d2fe;
+        border-radius: 12px;
+        background: #f8faff;
+      }
+
+      .config-title {
+        margin: 0 0 8px;
+        font-size: 0.95rem;
+        font-weight: 700;
+      }
+
+      .field {
+        margin-bottom: 10px;
+      }
+
+      .field label {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 0.82rem;
+        color: var(--muted);
+      }
+
+      .field input {
+        width: 100%;
+        min-height: 44px;
+        border: 1px solid #c7d2fe;
+        border-radius: 10px;
+        padding: 10px 12px;
+        font-size: 0.95rem;
       }
 
       .action-stage {
@@ -142,6 +201,12 @@
         background: #475569;
       }
 
+      .btn-small {
+        min-height: 44px;
+        font-size: 0.9rem;
+        box-shadow: none;
+      }
+
       .status {
         margin-top: 12px;
         min-height: 22px;
@@ -168,6 +233,24 @@
         <h1>Arbeiten erfassen</h1>
         <p class="hint">Bitte zuerst QR- oder DataMatrix-Code scannen.</p>
 
+        <div class="config-bar">
+          <div id="configState" class="config-state warn">Supabase nicht verbunden</div>
+          <button id="toggleConfigBtn" class="btn btn-secondary btn-small" type="button">Supabase einstellen</button>
+        </div>
+
+        <div id="configPanel" class="config-panel hidden">
+          <p class="config-title">Supabase Verbindung</p>
+          <div class="field">
+            <label for="supabaseUrlInput">Supabase URL</label>
+            <input id="supabaseUrlInput" type="text" placeholder="https://xxxx.supabase.co" />
+          </div>
+          <div class="field">
+            <label for="supabaseKeyInput">Supabase ANON KEY</label>
+            <input id="supabaseKeyInput" type="password" placeholder="eyJ..." />
+          </div>
+          <button id="saveConfigBtn" class="btn btn-lasern btn-small" type="button">Verbindung speichern</button>
+        </div>
+
         <div id="scanStage">
           <div class="scan-frame">
             <div id="reader"></div>
@@ -193,16 +276,24 @@
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script>
       // Supabase Konfiguration
-      const SUPABASE_URL = "HIER_SUPABASE_URL";
-      const SUPABASE_ANON_KEY = "HIER_SUPABASE_ANON_KEY";
+      const DEFAULT_SUPABASE_URL = "HIER_SUPABASE_URL";
+      const DEFAULT_SUPABASE_ANON_KEY = "HIER_SUPABASE_ANON_KEY";
 
       const scanStage = document.getElementById("scanStage");
       const actionStage = document.getElementById("actionStage");
       const codeBox = document.getElementById("codeBox");
       const statusEl = document.getElementById("status");
+      const configState = document.getElementById("configState");
+      const configPanel = document.getElementById("configPanel");
+      const toggleConfigBtn = document.getElementById("toggleConfigBtn");
+      const saveConfigBtn = document.getElementById("saveConfigBtn");
+      const supabaseUrlInput = document.getElementById("supabaseUrlInput");
+      const supabaseKeyInput = document.getElementById("supabaseKeyInput");
       const rescanBtn = document.getElementById("rescanBtn");
       const actionButtons = Array.from(document.querySelectorAll(".action-btn"));
 
+      let supabaseUrl = localStorage.getItem("supabase_url") || DEFAULT_SUPABASE_URL;
+      let supabaseAnonKey = localStorage.getItem("supabase_anon_key") || DEFAULT_SUPABASE_ANON_KEY;
       let scannedCode = "";
       let scannerReady = false;
       let scannerPaused = false;
@@ -219,6 +310,27 @@
       function setStatus(message, type = "") {
         statusEl.textContent = message;
         statusEl.className = `status ${type}`.trim();
+      }
+
+      function hasSupabaseConfig() {
+        const hasPlaceholders =
+          supabaseUrl.includes("HIER_SUPABASE_URL") || supabaseAnonKey.includes("HIER_SUPABASE_ANON_KEY");
+        return Boolean(supabaseUrl && supabaseAnonKey && !hasPlaceholders);
+      }
+
+      function updateConfigState() {
+        if (hasSupabaseConfig()) {
+          configState.textContent = "Supabase verbunden";
+          configState.className = "config-state ok";
+        } else {
+          configState.textContent = "Supabase nicht verbunden";
+          configState.className = "config-state warn";
+        }
+      }
+
+      function loadConfigIntoForm() {
+        supabaseUrlInput.value = supabaseUrl.includes("HIER_SUPABASE_URL") ? "" : supabaseUrl;
+        supabaseKeyInput.value = supabaseAnonKey.includes("HIER_SUPABASE_ANON_KEY") ? "" : supabaseAnonKey;
       }
 
       function setActionDisabled(disabled) {
@@ -319,15 +431,21 @@
           return;
         }
 
+        if (!hasSupabaseConfig()) {
+          setStatus("Bitte zuerst Supabase URL und ANON KEY einstellen.", "error");
+          configPanel.classList.remove("hidden");
+          return;
+        }
+
         setActionDisabled(true);
         setStatus("Speichere ...", "info");
 
         try {
-          const response = await fetch(`${SUPABASE_URL}/rest/v1/arbeiten`, {
+          const response = await fetch(`${supabaseUrl}/rest/v1/arbeiten`, {
             method: "POST",
             headers: {
-              apikey: SUPABASE_ANON_KEY,
-              Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+              apikey: supabaseAnonKey,
+              Authorization: `Bearer ${supabaseAnonKey}`,
               "Content-Type": "application/json",
               Prefer: "return=minimal"
             },
@@ -364,6 +482,28 @@
         });
       });
 
+      toggleConfigBtn.addEventListener("click", () => {
+        configPanel.classList.toggle("hidden");
+      });
+
+      saveConfigBtn.addEventListener("click", () => {
+        const nextUrl = supabaseUrlInput.value.trim().replace(/\/+$/, "");
+        const nextKey = supabaseKeyInput.value.trim();
+
+        if (!nextUrl || !nextKey) {
+          setStatus("Bitte Supabase URL und ANON KEY eintragen.", "error");
+          return;
+        }
+
+        supabaseUrl = nextUrl;
+        supabaseAnonKey = nextKey;
+        localStorage.setItem("supabase_url", supabaseUrl);
+        localStorage.setItem("supabase_anon_key", supabaseAnonKey);
+        updateConfigState();
+        configPanel.classList.add("hidden");
+        setStatus("Supabase-Verbindung gespeichert.", "ok");
+      });
+
       rescanBtn.addEventListener("click", () => {
         resetScanState();
         setStatus("Bereit für neuen Scan.", "info");
@@ -375,6 +515,8 @@
         }
       });
 
+      loadConfigIntoForm();
+      updateConfigState();
       resetScanState();
       startScanner();
     </script>
